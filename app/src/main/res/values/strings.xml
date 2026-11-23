@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Birthday Reminder</string>
+    <string name="notification_channel_name">Birthday Reminders</string>
+    <string name="notification_channel_desc">Alerts for upcoming and current birthdays</string>
+</resources>
