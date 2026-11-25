@@ -53,7 +53,7 @@ fun AddEditPersonDialog(
 ) {
     var name by remember { mutableStateOf(initialPerson?.name ?: "") }
     var birthMonth by remember { mutableIntStateOf(initialPerson?.birthMonth ?: (Calendar.getInstance().get(Calendar.MONTH) + 1)) }
-    var birthDay by remember { mutableIntStateOf(initialPerson?.birthDay ?: Calendar.getInstance().get(Calendar.DAY_OF_MONTH)) }
+    var birthDayText by remember { mutableStateOf((initialPerson?.birthDay ?: Calendar.getInstance().get(Calendar.DAY_OF_MONTH)).toString()) }
     var birthYearText by remember { mutableStateOf(initialPerson?.birthYear?.toString() ?: "") }
 
     // 12-Hour System with AM/PM
@@ -95,7 +95,7 @@ fun AddEditPersonDialog(
                 val parts = trimmed.removePrefix("--").split("-")
                 if (parts.size >= 2) {
                     parts[0].toIntOrNull()?.let { if (it in 1..12) birthMonth = it }
-                    parts[1].toIntOrNull()?.let { if (it in 1..31) birthDay = it }
+                    parts[1].toIntOrNull()?.let { if (it in 1..31) birthDayText = it.toString() }
                 }
             } else if (trimmed.contains("-") || trimmed.contains("/") || trimmed.contains(".")) {
                 val parts = trimmed.split('-', '/', '.')
@@ -108,14 +108,12 @@ fun AddEditPersonDialog(
                             // yyyy-MM-dd
                             birthYearText = p0.toString()
                             if (p1 in 1..12) birthMonth = p1
-                            if (p2 in 1..31) birthDay = p2
+                            if (p2 in 1..31) birthDayText = p2.toString()
                         } else if (p2 > 1000) {
                             // dd-MM-yyyy or MM-dd-yyyy
                             birthYearText = p2.toString()
-                            if (p1 in 1..12 && p0 in 1..31) {
-                                birthMonth = p1
-                                birthDay = p0
-                            }
+                            if (p1 in 1..12) birthMonth = p1
+                            if (p0 in 1..31) birthDayText = p0.toString()
                         }
                     }
                 }
@@ -127,7 +125,7 @@ fun AddEditPersonDialog(
                 if (y != null && m != null && d != null) {
                     birthYearText = y.toString()
                     if (m in 1..12) birthMonth = m
-                    if (d in 1..31) birthDay = d
+                    if (d in 1..31) birthDayText = d.toString()
                 }
             }
         } catch (e: Exception) {
@@ -226,16 +224,17 @@ fun AddEditPersonDialog(
     // Native DatePickerDialog for full calendar Year, Month, Day selection
     fun showDatePickerDialog() {
         val initialYear = birthYearText.toIntOrNull() ?: Calendar.getInstance().get(Calendar.YEAR)
+        val initialDay = birthDayText.toIntOrNull() ?: Calendar.getInstance().get(Calendar.DAY_OF_MONTH)
         DatePickerDialog(
             context,
             { _, year, month, dayOfMonth ->
                 birthYearText = year.toString()
                 birthMonth = month + 1
-                birthDay = dayOfMonth
+                birthDayText = dayOfMonth.toString()
             },
             initialYear,
             birthMonth - 1,
-            birthDay
+            initialDay
         ).show()
     }
 
@@ -335,6 +334,12 @@ fun AddEditPersonDialog(
                                     return@TextButton
                                 }
 
+                                val finalDay = birthDayText.toIntOrNull()
+                                if (finalDay == null || finalDay !in 1..31) {
+                                    errorMessage = "Please enter a valid birthday day (1-31)."
+                                    return@TextButton
+                                }
+
                                 val finalYear = birthYearText.toIntOrNull()
                                 val finalHour24 = getCalculated24Hour()
                                 val finalMinute = getCalculatedMinute()
@@ -342,7 +347,7 @@ fun AddEditPersonDialog(
                                 val personToSave = (initialPerson ?: Person()).copy(
                                     name = trimmedName,
                                     birthMonth = birthMonth,
-                                    birthDay = birthDay,
+                                    birthDay = finalDay,
                                     birthYear = finalYear,
                                     reminderHour = finalHour24,
                                     reminderMinute = finalMinute,
@@ -570,14 +575,17 @@ fun AddEditPersonDialog(
                                     }
                                 }
 
-                                // Day Input
+                                // Day Input (Fully editable and clearable)
                                 OutlinedTextField(
-                                    value = birthDay.toString(),
+                                    value = birthDayText,
                                     onValueChange = {
                                         val d = it.toIntOrNull()
-                                        if (d != null && d in 1..31) birthDay = d
+                                        if (it.isEmpty() || (d != null && d in 1..31)) {
+                                            birthDayText = it
+                                        }
                                     },
                                     label = { Text("Day") },
+                                    placeholder = { Text("1-31") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.weight(0.8f)
@@ -597,6 +605,7 @@ fun AddEditPersonDialog(
 
                             // Live formatted date summary preview
                             val parsedYear = birthYearText.toIntOrNull()
+                            val displayDay = if (birthDayText.isNotBlank()) birthDayText else "1"
                             val monthFormatted = monthNames.getOrElse(birthMonth - 1) { "" }
                             val turningAgeStr = parsedYear?.let {
                                 val currentYear = Calendar.getInstance().get(Calendar.YEAR)
@@ -610,7 +619,7 @@ fun AddEditPersonDialog(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
-                                    text = "🎂 Selected Date: $monthFormatted $birthDay${if (parsedYear != null) ", $parsedYear" else ""}$turningAgeStr",
+                                    text = "🎂 Selected Date: $monthFormatted $displayDay${if (parsedYear != null) ", $parsedYear" else ""}$turningAgeStr",
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.primary,
