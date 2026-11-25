@@ -47,6 +47,7 @@ fun PersonCard(
         SocialPlatform.WHATSAPP -> WhatsAppGreen
         SocialPlatform.SMS -> SmsPurple
         SocialPlatform.TELEGRAM -> TelegramBlue
+        SocialPlatform.INSTAGRAM -> Color(0xFFE1306C)
     }
 
     ElevatedCard(

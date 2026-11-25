@@ -44,6 +44,40 @@ object MessagingHelper {
             SocialPlatform.TELEGRAM -> {
                 sendViaTelegram(context, phoneOrHandle, message)
             }
+            SocialPlatform.INSTAGRAM -> {
+                sendViaInstagram(context, phoneOrHandle, message)
+            }
+        }
+    }
+
+    /**
+     * Opens Instagram Direct Message chat with the specified handle.
+     * Automatically copies the birthday wish to the clipboard so the user can easily paste it.
+     */
+    fun sendViaInstagram(context: Context, rawHandle: String, message: String): Boolean {
+        return try {
+            val handle = rawHandle.replace("@", "").trim()
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            val clip = android.content.ClipData.newPlainText("Birthday Wish", message)
+            clipboard?.setPrimaryClip(clip)
+            Toast.makeText(context, "Wish copied to clipboard! Paste it in the Instagram chat.", Toast.LENGTH_LONG).show()
+
+            val uri = Uri.parse("https://ig.me/m/$handle")
+            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+
+            val pm = context.packageManager
+            val instaAppIntent = Intent(Intent.ACTION_VIEW, Uri.parse("instagram://user?username=$handle"))
+            if (instaAppIntent.resolveActivity(pm) != null) {
+                intent.setPackage("com.instagram.android")
+            }
+
+            context.startActivity(intent)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to launch Instagram: ${e.message}", e)
+            openShareSheet(context, message)
         }
     }
 

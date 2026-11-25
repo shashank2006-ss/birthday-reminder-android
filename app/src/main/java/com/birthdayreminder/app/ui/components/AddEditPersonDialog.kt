@@ -272,17 +272,29 @@ fun AddEditPersonDialog(
                     }
 
                     // Phone Number / Handle & Device Contact Picker
+                    val showContactPicker = selectedPlatform != SocialPlatform.INSTAGRAM
+                    val fieldLabel = when (selectedPlatform) {
+                        SocialPlatform.WHATSAPP, SocialPlatform.SMS -> "Phone Number *"
+                        SocialPlatform.TELEGRAM -> "Telegram Handle or Phone Number *"
+                        SocialPlatform.INSTAGRAM -> "Instagram Handle *"
+                    }
+                    val fieldPlaceholder = when (selectedPlatform) {
+                        SocialPlatform.WHATSAPP, SocialPlatform.SMS -> "Type phone or pick from contacts"
+                        SocialPlatform.TELEGRAM -> "Type @username or pick from contacts"
+                        SocialPlatform.INSTAGRAM -> "Enter @handle (handle only)"
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = if (selectedPlatform == SocialPlatform.TELEGRAM) "Telegram Username *" else "Phone Number *",
+                            text = fieldLabel,
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold
                         )
-                        if (selectedPlatform != SocialPlatform.TELEGRAM) {
+                        if (showContactPicker) {
                             FilledTonalButton(
                                 onClick = { contactPickerLauncher.launch(null) },
                                 shape = RoundedCornerShape(8.dp),
@@ -302,14 +314,9 @@ fun AddEditPersonDialog(
                     OutlinedTextField(
                         value = phoneNumber,
                         onValueChange = { phoneNumber = it },
-                        placeholder = {
-                            Text(
-                                if (selectedPlatform == SocialPlatform.TELEGRAM) "@username"
-                                else "Type directly or pick from contacts"
-                            )
-                        },
+                        placeholder = { Text(fieldPlaceholder) },
                         trailingIcon = {
-                            if (selectedPlatform != SocialPlatform.TELEGRAM) {
+                            if (showContactPicker) {
                                 IconButton(onClick = { contactPickerLauncher.launch(null) }) {
                                     Icon(
                                         imageVector = Icons.Default.Contacts,
@@ -321,7 +328,10 @@ fun AddEditPersonDialog(
                         },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
-                            keyboardType = if (selectedPlatform == SocialPlatform.TELEGRAM) KeyboardType.Text else KeyboardType.Phone
+                            keyboardType = when (selectedPlatform) {
+                                SocialPlatform.WHATSAPP, SocialPlatform.SMS -> KeyboardType.Phone
+                                SocialPlatform.TELEGRAM, SocialPlatform.INSTAGRAM -> KeyboardType.Text
+                            }
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
