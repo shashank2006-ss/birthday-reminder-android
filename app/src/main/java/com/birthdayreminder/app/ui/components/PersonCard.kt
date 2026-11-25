@@ -1,6 +1,7 @@
 package com.birthdayreminder.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,16 +17,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.birthdayreminder.app.data.model.Person
 import com.birthdayreminder.app.data.model.SocialPlatform
-import com.birthdayreminder.app.ui.theme.BirthdayGold
 import com.birthdayreminder.app.ui.theme.SmsPurple
 import com.birthdayreminder.app.ui.theme.TelegramBlue
-import com.birthdayreminder.app.ui.theme.TodayHighlight
 import com.birthdayreminder.app.ui.theme.WhatsAppGreen
 
 @Composable
@@ -50,33 +50,54 @@ fun PersonCard(
         SocialPlatform.INSTAGRAM -> Color(0xFFE1306C)
     }
 
-    ElevatedCard(
+    val countdownLabel = when {
+        isToday -> "Today! 🎉"
+        isTomorrow -> "Tomorrow"
+        else -> "In $daysRemaining days"
+    }
+
+    val countdownBg = when {
+        isToday -> Color(0xFFE53935)
+        isTomorrow -> Color(0xFFFB8C00)
+        else -> MaterialTheme.colorScheme.surfaceVariant
+    }
+
+    val countdownTextColor = when {
+        isToday || isTomorrow -> Color.White
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Card(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = if (isToday) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+        colors = CardDefaults.cardColors(
+            containerColor = if (isToday) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
                              else MaterialTheme.colorScheme.surface
-        )
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(14.dp)
         ) {
-            // Header: Name, turning age, and Days remaining badge
+            // Header Row: Avatar, Name & Turning Age, Days Remaining Pill
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
-                            .background(platformColor.copy(alpha = 0.2f)),
+                            .background(platformColor.copy(alpha = 0.18f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -88,13 +109,24 @@ fun PersonCard(
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
-                        Text(
-                            text = person.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = person.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (!person.isEnabled) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Default.NotificationsOff,
+                                    contentDescription = "Muted",
+                                    tint = MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = person.getFormattedDate(),
@@ -116,78 +148,74 @@ fun PersonCard(
                 // Days Remaining Pill
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = when {
-                        isToday -> TodayHighlight
-                        isTomorrow -> BirthdayGold
-                        else -> MaterialTheme.colorScheme.secondaryContainer
-                    }
+                    color = countdownBg
                 ) {
                     Text(
-                        text = when {
-                            isToday -> "Today! 🎉"
-                            isTomorrow -> "Tomorrow"
-                            else -> "In $daysRemaining days"
-                        },
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        text = countdownLabel,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = when {
-                            isToday -> Color.White
-                            isTomorrow -> Color.Black
-                            else -> MaterialTheme.colorScheme.onSecondaryContainer
-                        }
+                        color = countdownTextColor
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Reminder time & Platform tags
+            // Tags Row: Reminder Time & Platform Chip
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                SuggestionChip(
-                    onClick = {},
-                    label = { Text("⏰ ${person.getFormattedTime()}") }
-                )
-                SuggestionChip(
-                    onClick = {},
-                    label = { Text(person.socialPlatform.displayName) },
-                    colors = SuggestionChipDefaults.suggestionChipColors(
-                        labelColor = platformColor
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ) {
+                    Text(
+                        text = "⏰ ${person.getFormattedTime()}",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
-                )
-                if (person.autoSendSmsDirectly && person.socialPlatform == SocialPlatform.SMS) {
-                    SuggestionChip(
-                        onClick = {},
-                        label = { Text("⚡ Auto-Send") }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = platformColor.copy(alpha = 0.12f)
+                ) {
+                    Text(
+                        text = person.socialPlatform.displayName,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = platformColor,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Message preview
+            // Message Preview Bubble
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
             ) {
                 Text(
                     text = "\"${person.customMessage}\"",
                     style = MaterialTheme.typography.bodySmall,
+                    fontStyle = FontStyle.Italic,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(10.dp)
+                    modifier = Modifier.padding(8.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Action Row: Send button, Edit, Enabled Switch, Delete
+            // Action Row: Big "Send Wish" button, Mute toggle, Edit, Delete
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -202,18 +230,19 @@ fun PersonCard(
                     Icon(
                         imageVector = Icons.Default.Send,
                         contentDescription = "Send Wish",
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Send Wish", fontSize = 13.sp)
+                    Text("Send Wish", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { onToggleEnabled(person) }) {
                         Icon(
                             imageVector = if (person.isEnabled) Icons.Default.Notifications else Icons.Default.NotificationsOff,
-                            contentDescription = "Toggle Reminder",
-                            tint = if (person.isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                            contentDescription = "Toggle Mute",
+                            tint = if (person.isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
@@ -221,7 +250,8 @@ fun PersonCard(
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Edit Person",
-                            tint = MaterialTheme.colorScheme.secondary
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
@@ -229,7 +259,8 @@ fun PersonCard(
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = "Delete Person",
-                            tint = MaterialTheme.colorScheme.error
+                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }

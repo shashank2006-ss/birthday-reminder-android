@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Search
@@ -18,7 +19,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.birthdayreminder.app.data.model.Person
 import com.birthdayreminder.app.ui.components.AddEditPersonDialog
 import com.birthdayreminder.app.ui.components.BirthdayCalendarView
 import com.birthdayreminder.app.ui.components.PersonCard
@@ -45,146 +45,194 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = {
-                    Column {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = "🎂 Birthday Reminder",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
+                            fontSize = 18.sp
                         )
                         if (nextBirthday != null) {
                             val days = nextBirthday.getDaysRemaining()
-                            val nextText = if (days == 0) "Today is ${nextBirthday.name}'s birthday! 🎉"
-                                           else "Next: ${nextBirthday.name} (in $days days)"
+                            val nextText = when (days) {
+                                0 -> "🎉 Today is ${nextBirthday.name}'s birthday!"
+                                1 -> "Next: ${nextBirthday.name} tomorrow"
+                                else -> "Next: ${nextBirthday.name} in $days days"
+                            }
                             Text(
                                 text = nextText,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                actions = {
+                    IconButton(onClick = { showAddDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Add Birthday",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             )
         },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showAddDialog = true },
-                icon = { Icon(Icons.Default.Add, contentDescription = "Add Birthday") },
-                text = { Text("Add Birthday") },
-                shape = RoundedCornerShape(16.dp),
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            )
+        bottomBar = {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 4.dp
+            ) {
+                NavigationBarItem(
+                    selected = selectedTabIndex == 0,
+                    onClick = { selectedTabIndex = 0 },
+                    icon = { Icon(Icons.Default.FormatListBulleted, contentDescription = "Upcoming") },
+                    label = { Text("Upcoming") }
+                )
+                NavigationBarItem(
+                    selected = selectedTabIndex == 1,
+                    onClick = { selectedTabIndex = 1 },
+                    icon = { Icon(Icons.Default.CalendarMonth, contentDescription = "Calendar") },
+                    label = { Text("Calendar") }
+                )
+            }
         }
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Tabs: Upcoming List vs Calendar
-            TabRow(selectedTabIndex = selectedTabIndex) {
-                Tab(
-                    selected = selectedTabIndex == 0,
-                    onClick = { selectedTabIndex = 0 },
-                    text = { Text("Upcoming (${allPeople.size})") },
-                    icon = { Icon(Icons.Default.FormatListBulleted, contentDescription = null) }
-                )
-                Tab(
-                    selected = selectedTabIndex == 1,
-                    onClick = { selectedTabIndex = 1 },
-                    text = { Text("Calendar") },
-                    icon = { Icon(Icons.Default.CalendarMonth, contentDescription = null) }
-                )
-            }
-
             when (selectedTabIndex) {
                 0 -> {
-                    // Search Bar
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { viewModel.searchQuery.value = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        placeholder = { Text("Search by name, phone, or date...") },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.searchQuery.value = "" }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Clear search")
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    if (filteredPeople.isEmpty()) {
-                        Box(
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Search Bar (Matching iOS search prompt and layout)
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { viewModel.searchQuery.value = it },
                             modifier = Modifier
-                                .fillMaxSize()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            placeholder = { Text("Search name, phone, or date...") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { viewModel.searchQuery.value = "" }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Clear,
+                                            contentDescription = "Clear search",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        if (allPeople.isEmpty()) {
+                            // Empty state view matching iOS UpcomingListView emptyStateView
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(32.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = if (searchQuery.isNotEmpty()) "No results matching \"$searchQuery\""
-                                           else "No birthdays added yet! 🎈",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = if (searchQuery.isNotEmpty()) "Try a different search term"
-                                           else "Add your friends and family to automatically schedule notifications and wishes.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    textAlign = TextAlign.Center,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                if (searchQuery.isEmpty()) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CardGiftcard,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(64.dp),
+                                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                    )
                                     Spacer(modifier = Modifier.height(16.dp))
-                                    Button(onClick = { showAddDialog = true }) {
-                                        Icon(Icons.Default.Add, contentDescription = null)
+                                    Text(
+                                        text = "No Birthdays Added Yet",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "Add friends and family to automatically receive notifications and send personalized wishes via WhatsApp, SMS, or Telegram.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(20.dp))
+                                    Button(
+                                        onClick = { showAddDialog = true },
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Add, contentDescription = null)
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Add First Birthday")
+                                        Text("Add First Birthday", fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
-                        }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(bottom = 88.dp)
-                        ) {
-                            items(filteredPeople, key = { it.id }) { person ->
-                                PersonCard(
-                                    person = person,
-                                    onEditClick = { viewModel.editingPerson.value = it },
-                                    onDeleteClick = { viewModel.deletePerson(it.id) },
-                                    onSendClick = { viewModel.quickSendPerson.value = it },
-                                    onToggleEnabled = { viewModel.toggleEnabled(it) }
-                                )
+                        } else if (filteredPeople.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = "No results matching \"$searchQuery\"",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "Try searching for a different name, date, or phone number.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(vertical = 4.dp)
+                            ) {
+                                items(filteredPeople, key = { it.id }) { person ->
+                                    PersonCard(
+                                        person = person,
+                                        onEditClick = { viewModel.editingPerson.value = it },
+                                        onDeleteClick = { viewModel.deletePerson(it.id) },
+                                        onSendClick = { viewModel.quickSendPerson.value = it },
+                                        onToggleEnabled = { viewModel.toggleEnabled(it) }
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
                 1 -> {
-                    // Calendar Tab
                     BirthdayCalendarView(
                         people = allPeople,
                         onPersonClick = { viewModel.quickSendPerson.value = it },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }
@@ -215,7 +263,7 @@ fun HomeScreen(
         )
     }
 
-    // Quick Send Dialog (Message preview & live editing)
+    // Quick Send Dialog
     quickSendPerson?.let { person ->
         QuickSendDialog(
             person = person,
