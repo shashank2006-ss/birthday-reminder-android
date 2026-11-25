@@ -3,6 +3,7 @@ package com.birthdayreminder.app.ui.components
 import android.Manifest
 import android.app.Activity
 import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -10,6 +11,8 @@ import android.provider.ContactsContract
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -17,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.PersonSearch
@@ -24,6 +28,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -51,8 +56,14 @@ fun AddEditPersonDialog(
     var birthDay by remember { mutableIntStateOf(initialPerson?.birthDay ?: Calendar.getInstance().get(Calendar.DAY_OF_MONTH)) }
     var birthYearText by remember { mutableStateOf(initialPerson?.birthYear?.toString() ?: "") }
 
-    var reminderHour by remember { mutableIntStateOf(initialPerson?.reminderHour ?: 9) }
-    var reminderMinute by remember { mutableIntStateOf(initialPerson?.reminderMinute ?: 0) }
+    // 12-Hour System with AM/PM
+    val initial24Hour = initialPerson?.reminderHour ?: 9
+    val initial12Hour = if (initial24Hour == 0) 12 else if (initial24Hour > 12) initial24Hour - 12 else initial24Hour
+    val initialAm = initial24Hour < 12
+
+    var hour12Text by remember { mutableStateOf(initial12Hour.toString()) }
+    var minuteText by remember { mutableStateOf(String.format(Locale.US, "%02d", initialPerson?.reminderMinute ?: 0)) }
+    var isAm by remember { mutableStateOf(initialAm) }
 
     var selectedPlatform by remember { mutableStateOf(initialPerson?.socialPlatform ?: SocialPlatform.WHATSAPP) }
     var phoneNumber by remember { mutableStateOf(initialPerson?.phoneNumber ?: "") }
@@ -228,6 +239,47 @@ fun AddEditPersonDialog(
         ).show()
     }
 
+    // Native 12-hour TimePickerDialog
+    fun showTimePickerDialog() {
+        val currentH12 = hour12Text.toIntOrNull() ?: 12
+        val currentM = minuteText.toIntOrNull() ?: 0
+        val current24H = when {
+            currentH12 == 12 && isAm -> 0
+            currentH12 == 12 && !isAm -> 12
+            isAm -> currentH12
+            else -> currentH12 + 12
+        }
+
+        TimePickerDialog(
+            context,
+            { _, hourOfDay, minute ->
+                isAm = hourOfDay < 12
+                val h12 = if (hourOfDay == 0) 12 else if (hourOfDay > 12) hourOfDay - 12 else hourOfDay
+                hour12Text = h12.toString()
+                minuteText = String.format(Locale.US, "%02d", minute)
+            },
+            current24H,
+            currentM,
+            false // 12-hour view with AM/PM!
+        ).show()
+    }
+
+    // Helper: calculate 24h equivalent from 12h inputs
+    fun getCalculated24Hour(): Int {
+        val h12 = hour12Text.toIntOrNull() ?: 12
+        return when {
+            h12 == 12 && isAm -> 0
+            h12 == 12 && !isAm -> 12
+            isAm -> h12.coerceIn(1, 11)
+            else -> h12.coerceIn(1, 11) + 12
+        }
+    }
+
+    fun getCalculatedMinute(): Int {
+        val m = minuteText.toIntOrNull() ?: 0
+        return m.coerceIn(0, 59)
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -284,13 +336,16 @@ fun AddEditPersonDialog(
                                 }
 
                                 val finalYear = birthYearText.toIntOrNull()
+                                val finalHour24 = getCalculated24Hour()
+                                val finalMinute = getCalculatedMinute()
+
                                 val personToSave = (initialPerson ?: Person()).copy(
                                     name = trimmedName,
                                     birthMonth = birthMonth,
                                     birthDay = birthDay,
                                     birthYear = finalYear,
-                                    reminderHour = reminderHour,
-                                    reminderMinute = reminderMinute,
+                                    reminderHour = finalHour24,
+                                    reminderMinute = finalMinute,
                                     socialPlatform = selectedPlatform,
                                     phoneNumber = trimmedPhone,
                                     autoSendSmsDirectly = autoSendSms,
@@ -565,7 +620,7 @@ fun AddEditPersonDialog(
                         }
                     }
 
-                    // SECTION 3: Reminder & Send Time (matching iOS Section "Reminder & Send Time")
+                    // SECTION 3: Reminder & Send Time (12-Hour System with AM/PM)
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
@@ -577,17 +632,39 @@ fun AddEditPersonDialog(
                                 .padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(
-                                text = "Reminder & Send Time",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Reminder & Send Time",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
 
-                            // Quick Time Presets (Midnight, Morning, Noon)
-                            val isMidnight = reminderHour == 0 && reminderMinute == 0
-                            val isMorning = reminderHour == 9 && reminderMinute == 0
-                            val isNoon = reminderHour == 12 && reminderMinute == 0
+                                FilledTonalButton(
+                                    onClick = { showTimePickerDialog() },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.AccessTime,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Pick Time", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+
+                            // Quick Presets: Midnight (12:00 AM), Morning (9:00 AM), Noon (12:00 PM)
+                            val currentH12Val = hour12Text.toIntOrNull() ?: 12
+                            val currentMVal = minuteText.toIntOrNull() ?: 0
+                            val isMidnightSelected = currentH12Val == 12 && currentMVal == 0 && isAm
+                            val isMorningSelected = currentH12Val == 9 && currentMVal == 0 && isAm
+                            val isNoonSelected = currentH12Val == 12 && currentMVal == 0 && !isAm
 
                             Row(
                                 modifier = Modifier
@@ -597,95 +674,152 @@ fun AddEditPersonDialog(
                             ) {
                                 FilledTonalButton(
                                     onClick = {
-                                        reminderHour = 0
-                                        reminderMinute = 0
+                                        hour12Text = "12"
+                                        minuteText = "00"
+                                        isAm = true
                                     },
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.filledTonalButtonColors(
-                                        containerColor = if (isMidnight) Color(0xFF9C27B0).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant
+                                        containerColor = if (isMidnightSelected) Color(0xFF9C27B0).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant
                                     )
                                 ) {
                                     Text(
                                         text = "🌙 Midnight (12:00 AM)",
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isMidnight) Color(0xFF7B1FA2) else MaterialTheme.colorScheme.onSurface
+                                        color = if (isMidnightSelected) Color(0xFF7B1FA2) else MaterialTheme.colorScheme.onSurface
                                     )
                                 }
 
                                 FilledTonalButton(
                                     onClick = {
-                                        reminderHour = 9
-                                        reminderMinute = 0
+                                        hour12Text = "9"
+                                        minuteText = "00"
+                                        isAm = true
                                     },
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.filledTonalButtonColors(
-                                        containerColor = if (isMorning) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                        containerColor = if (isMorningSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
                                     )
                                 ) {
                                     Text(
                                         text = "🌅 Morning (9:00 AM)",
                                         fontSize = 12.sp,
-                                        fontWeight = if (isMorning) FontWeight.Bold else FontWeight.Normal
+                                        fontWeight = if (isMorningSelected) FontWeight.Bold else FontWeight.Normal
                                     )
                                 }
 
                                 FilledTonalButton(
                                     onClick = {
-                                        reminderHour = 12
-                                        reminderMinute = 0
+                                        hour12Text = "12"
+                                        minuteText = "00"
+                                        isAm = false
                                     },
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.filledTonalButtonColors(
-                                        containerColor = if (isNoon) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                        containerColor = if (isNoonSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
                                     )
                                 ) {
                                     Text(
                                         text = "☀️ Noon (12:00 PM)",
                                         fontSize = 12.sp,
-                                        fontWeight = if (isNoon) FontWeight.Bold else FontWeight.Normal
+                                        fontWeight = if (isNoonSelected) FontWeight.Bold else FontWeight.Normal
                                     )
                                 }
                             }
 
-                            // Exact Time Pickers
+                            // 12-Hour Exact Time Inputs: Hour (1-12), Minute (00-59), and AM / PM Toggle
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 OutlinedTextField(
-                                    value = String.format(Locale.US, "%02d", reminderHour),
+                                    value = hour12Text,
                                     onValueChange = {
                                         val h = it.toIntOrNull()
-                                        if (h != null && h in 0..23) reminderHour = h
+                                        if (it.isEmpty() || (h != null && h in 1..12)) {
+                                            hour12Text = it
+                                        }
                                     },
-                                    label = { Text("Hour (0-23)") },
+                                    label = { Text("Hour (1-12)") },
+                                    placeholder = { Text("12") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.weight(1f)
                                 )
 
                                 OutlinedTextField(
-                                    value = String.format(Locale.US, "%02d", reminderMinute),
+                                    value = minuteText,
                                     onValueChange = {
                                         val m = it.toIntOrNull()
-                                        if (m != null && m in 0..59) reminderMinute = m
+                                        if (it.isEmpty() || (m != null && m in 0..59)) {
+                                            minuteText = it
+                                        }
                                     },
                                     label = { Text("Minute (0-59)") },
+                                    placeholder = { Text("00") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.weight(1f)
                                 )
+
+                                // AM / PM Segmented Switch
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1.2f)
+                                        .height(56.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                        .padding(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isAm) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                            .clickable { isAm = true },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "AM",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = if (isAm) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (!isAm) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                            .clickable { isAm = false },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "PM",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = if (!isAm) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                             }
 
-                            // Live explanation badge of selected time (Midnight / Noon / Morning / Evening)
-                            val hour12 = if (reminderHour == 0) 12 else if (reminderHour > 12) reminderHour - 12 else reminderHour
-                            val amPm = if (reminderHour >= 12) "PM" else "AM"
-                            val minFormatted = String.format(Locale.US, "%02d", reminderMinute)
+                            // Live explanation badge of selected time
+                            val computed24H = getCalculated24Hour()
+                            val computedMin = getCalculatedMinute()
+                            val displayH12 = if (hour12Text.isNotBlank()) hour12Text else "12"
+                            val displayMin = String.format(Locale.US, "%02d", computedMin)
+                            val displayAmPm = if (isAm) "AM" else "PM"
 
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
-                                color = when (reminderHour) {
+                                color = when (computed24H) {
                                     0 -> Color(0xFF9C27B0).copy(alpha = 0.12f)
                                     12 -> Color(0xFFFF9800).copy(alpha = 0.12f)
                                     else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
@@ -693,15 +827,15 @@ fun AddEditPersonDialog(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
-                                    text = when (reminderHour) {
-                                        0 -> "🌙 Exactly $hour12:$minFormatted $amPm (Midnight — Right at 12:00 as the date changes!)"
-                                        12 -> "☀️ Exactly $hour12:$minFormatted $amPm (Noon — Midday / Lunchtime)"
-                                        in 1..11 -> "🌅 $hour12:$minFormatted $amPm (Morning reminder)"
-                                        else -> "🌆 $hour12:$minFormatted $amPm (Afternoon / Evening reminder)"
+                                    text = when (computed24H) {
+                                        0 -> "🌙 Exactly $displayH12:$displayMin $displayAmPm (Midnight — Right at 12:00 as the date changes!)"
+                                        12 -> "☀️ Exactly $displayH12:$displayMin $displayAmPm (Noon — Midday / Lunchtime)"
+                                        in 1..11 -> "🌅 $displayH12:$displayMin $displayAmPm (Morning reminder)"
+                                        else -> "🌆 $displayH12:$displayMin $displayAmPm (Afternoon / Evening reminder)"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = if (reminderHour == 0 || reminderHour == 12) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = when (reminderHour) {
+                                    fontWeight = if (computed24H == 0 || computed24H == 12) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = when (computed24H) {
                                         0 -> Color(0xFF7B1FA2)
                                         12 -> Color(0xFFE65100)
                                         else -> MaterialTheme.colorScheme.onSurface
