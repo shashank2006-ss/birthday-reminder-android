@@ -225,6 +225,39 @@ fun AddEditPersonDialog(
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold
                     )
+
+                    // Quick-Time Presets (Midnight, Morning, Noon)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val isMidnight = reminderHour == 0 && reminderMinute == 0
+                        SuggestionChip(
+                            onClick = {
+                                reminderHour = 0
+                                reminderMinute = 0
+                            },
+                            label = { Text("🌙 Midnight (12:00 AM)", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = if (isMidnight) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+                            )
+                        )
+                        SuggestionChip(
+                            onClick = {
+                                reminderHour = 9
+                                reminderMinute = 0
+                            },
+                            label = { Text("🌅 09:00 AM", fontSize = 11.sp) }
+                        )
+                        SuggestionChip(
+                            onClick = {
+                                reminderHour = 12
+                                reminderMinute = 0
+                            },
+                            label = { Text("☀️ 12:00 PM (Noon)", fontSize = 11.sp) }
+                        )
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -250,6 +283,38 @@ fun AddEditPersonDialog(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f)
                         )
+                    }
+
+                    // Live explanation badge of selected time (Eliminates Midnight 12 AM vs Noon 12 PM confusion)
+                    val hour12 = if (reminderHour == 0) 12 else if (reminderHour > 12) reminderHour - 12 else reminderHour
+                    val amPm = if (reminderHour >= 12) "PM" else "AM"
+                    val minFormatted = String.format(Locale.US, "%02d", reminderMinute)
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = when (reminderHour) {
+                            0 -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                            12 -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+                            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = when (reminderHour) {
+                                    0 -> "🌙 Exactly $hour12:$minFormatted $amPm (Midnight — Right as the date changes!)"
+                                    12 -> "☀️ Exactly $hour12:$minFormatted $amPm (Noon — Middle of the day)"
+                                    in 1..11 -> "🌅 $hour12:$minFormatted $amPm (Morning)"
+                                    else -> "🌆 $hour12:$minFormatted $amPm (Evening / Night)"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = if (reminderHour == 0 || reminderHour == 12) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (reminderHour == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                     }
 
                     // Social Media / Platform Selection
