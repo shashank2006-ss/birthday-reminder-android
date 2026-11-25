@@ -3,9 +3,10 @@ name: Build Birthday Reminder APK
 on:
   push:
     branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -29,10 +30,24 @@ jobs:
     - name: Build Debug APK
       run: |
         gradle assembleDebug --stacktrace
+        cp app/build/outputs/apk/debug/app-debug.apk BirthdayReminder.apk
 
-    - name: Upload APK Artifact
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: BirthdayReminder-Debug-APK
-        path: app/build/outputs/apk/debug/app-debug.apk
+        path: BirthdayReminder.apk
         retention-days: 14
+
+    - name: Publish Direct APK to GitHub Releases
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: latest
+        name: "Birthday Reminder APK (Latest)"
+        body: |
+          ### 🎂 Birthday Reminder Android App
+          **Direct Phone Download:**
+          Tap the **`BirthdayReminder.apk`** file below to download and install directly on your Android phone (no laptop or cable required!).
+        files: BirthdayReminder.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
