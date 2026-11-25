@@ -1,6 +1,21 @@
-# 🎂 Birthday Reminder & Auto-Wisher Android App (APK)
+# 🎂 Birthday Reminder & Auto-Wisher Android App
 
-A clean, modern Android application built with **Kotlin** and **Jetpack Compose (Material 3)**. It provides an interactive calendar, unlimited birthday management, scheduled exact-minute alarms, rich notifications, and multi-platform messaging automation for **WhatsApp**, **SMS**, and **Telegram**.
+<div align="center">
+
+### 📲 Quick Download:
+
+[![Download Android APK](https://img.shields.io/badge/📥_DOWNLOAD_APK-Latest_Release-2ea44f?style=for-the-badge&logo=android&logoColor=white)](https://github.com/shashank2006-ss/birthday-reminder-android/releases/latest/download/BirthdayReminder.apk)
+[![View All Releases](https://img.shields.io/badge/📦_All_Releases-GitHub-blue?style=for-the-badge&logo=github)](https://github.com/shashank2006-ss/birthday-reminder-android/releases)
+
+### 👉 [Click Here to Download BirthdayReminder.apk directly to your phone](https://github.com/shashank2006-ss/birthday-reminder-android/releases/latest/download/BirthdayReminder.apk) 👈
+
+*No laptop or cables required! Tap the link above on your phone browser to download and install instantly.*
+
+---
+
+</div>
+
+A clean, modern Android application built with **Kotlin** and **Jetpack Compose (Material 3)**. It provides an interactive calendar, unlimited birthday management, scheduled exact-minute alarms, rich notifications, and multi-platform messaging automation for **WhatsApp**, **SMS**, **Telegram**, and **Instagram**.
 
 ---
 
