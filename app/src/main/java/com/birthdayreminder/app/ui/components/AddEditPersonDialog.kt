@@ -1,7 +1,13 @@
 package com.birthdayreminder.app.ui.components
 
+import android.Manifest
+import android.app.Activity
+import android.app.DatePickerDialog
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.ContactsContract
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
@@ -11,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material3.*
@@ -25,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import com.birthdayreminder.app.data.model.Person
 import com.birthdayreminder.app.data.model.SocialPlatform
 import java.text.DateFormatSymbols
@@ -41,7 +49,6 @@ fun AddEditPersonDialog(
     var name by remember { mutableStateOf(initialPerson?.name ?: "") }
     var birthMonth by remember { mutableIntStateOf(initialPerson?.birthMonth ?: (Calendar.getInstance().get(Calendar.MONTH) + 1)) }
     var birthDay by remember { mutableIntStateOf(initialPerson?.birthDay ?: Calendar.getInstance().get(Calendar.DAY_OF_MONTH)) }
-    var includesBirthYear by remember { mutableStateOf(initialPerson?.birthYear != null) }
     var birthYearText by remember { mutableStateOf(initialPerson?.birthYear?.toString() ?: "") }
 
     var reminderHour by remember { mutableIntStateOf(initialPerson?.reminderHour ?: 9) }
@@ -68,98 +75,157 @@ fun AddEditPersonDialog(
     )
 
     val context = LocalContext.current
-    val contactPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickContact()
-    ) { contactUri: Uri? ->
-        contactUri?.let { uri ->
-            try {
-                val cursor = context.contentResolver.query(uri, null, null, null, null)
-                cursor?.use { c ->
-                    if (c.moveToFirst()) {
-                        val idIndex = c.getColumnIndex(ContactsContract.Contacts._ID)
-                        val nameIndex = c.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
-                        val hasPhoneIndex = c.getColumnIndex(ContactsContract.Contacts.HAS_PHONE_NUMBER)
 
-                        if (nameIndex != -1) {
-                            val pickedName = c.getString(nameIndex)
-                            if (!pickedName.isNullOrBlank()) {
-                                name = pickedName
-                            }
-                        }
-
-                        val contactId = if (idIndex != -1) c.getString(idIndex) else null
-                        val hasPhone = if (hasPhoneIndex != -1) c.getInt(hasPhoneIndex) > 0 else true
-
-                        if (contactId != null && hasPhone) {
-                            val phoneCursor = context.contentResolver.query(
-                                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                                arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
-                                "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
-                                arrayOf(contactId),
-                                null
-                            )
-                            phoneCursor?.use { pc ->
-                                if (pc.moveToFirst()) {
-                                    val numberIndex = pc.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                                    if (numberIndex != -1) {
-                                        val number = pc.getString(numberIndex)
-                                        if (!number.isNullOrBlank()) {
-                                            phoneNumber = number.replace("[^0-9+]".toRegex(), "")
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Try to auto-read contact birthday from ContactsContract.Data
-                        if (contactId != null) {
-                            try {
-                                val bdayCursor = context.contentResolver.query(
-                                    ContactsContract.Data.CONTENT_URI,
-                                    arrayOf(ContactsContract.CommonDataKinds.Event.START_DATE),
-                                    "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ? AND ${ContactsContract.CommonDataKinds.Event.TYPE} = ?",
-                                    arrayOf(
-                                        contactId,
-                                        ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE,
-                                        ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY.toString()
-                                    ),
-                                    null
-                                )
-                                bdayCursor?.use { bc ->
-                                    if (bc.moveToFirst()) {
-                                        val bdayStr = bc.getString(0)
-                                        if (!bdayStr.isNullOrBlank()) {
-                                            // Formats: yyyy-MM-dd or --MM-dd
-                                            if (bdayStr.startsWith("--")) {
-                                                val parts = bdayStr.removePrefix("--").split("-")
-                                                if (parts.size >= 2) {
-                                                    parts[0].toIntOrNull()?.let { birthMonth = it }
-                                                    parts[1].toIntOrNull()?.let { birthDay = it }
-                                                }
-                                            } else {
-                                                val parts = bdayStr.split("-")
-                                                if (parts.size >= 3) {
-                                                    parts[0].toIntOrNull()?.let {
-                                                        includesBirthYear = true
-                                                        birthYearText = it.toString()
-                                                    }
-                                                    parts[1].toIntOrNull()?.let { birthMonth = it }
-                                                    parts[2].toIntOrNull()?.let { birthDay = it }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                e.printStackTrace()
+    fun parseAndSetBirthday(rawBday: String) {
+        try {
+            val trimmed = rawBday.trim()
+            if (trimmed.startsWith("--")) {
+                // Format: --MM-dd
+                val parts = trimmed.removePrefix("--").split("-")
+                if (parts.size >= 2) {
+                    parts[0].toIntOrNull()?.let { if (it in 1..12) birthMonth = it }
+                    parts[1].toIntOrNull()?.let { if (it in 1..31) birthDay = it }
+                }
+            } else if (trimmed.contains("-") || trimmed.contains("/") || trimmed.contains(".")) {
+                val parts = trimmed.split('-', '/', '.')
+                if (parts.size == 3) {
+                    val p0 = parts[0].toIntOrNull()
+                    val p1 = parts[1].toIntOrNull()
+                    val p2 = parts[2].toIntOrNull()
+                    if (p0 != null && p1 != null && p2 != null) {
+                        if (p0 > 1000) {
+                            // yyyy-MM-dd
+                            birthYearText = p0.toString()
+                            if (p1 in 1..12) birthMonth = p1
+                            if (p2 in 1..31) birthDay = p2
+                        } else if (p2 > 1000) {
+                            // dd-MM-yyyy or MM-dd-yyyy
+                            birthYearText = p2.toString()
+                            if (p1 in 1..12 && p0 in 1..31) {
+                                birthMonth = p1
+                                birthDay = p0
                             }
                         }
                     }
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
+            } else if (trimmed.length == 8 && trimmed.all { it.isDigit() }) {
+                // yyyyMMdd
+                val y = trimmed.substring(0, 4).toIntOrNull()
+                val m = trimmed.substring(4, 6).toIntOrNull()
+                val d = trimmed.substring(6, 8).toIntOrNull()
+                if (y != null && m != null && d != null) {
+                    birthYearText = y.toString()
+                    if (m in 1..12) birthMonth = m
+                    if (d in 1..31) birthDay = d
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    // Phone & Contact Picker Launcher (using CommonDataKinds.Phone.CONTENT_URI)
+    val contactPhonePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val contactDataUri: Uri? = result.data?.data
+            if (contactDataUri != null) {
+                try {
+                    val cursor = context.contentResolver.query(
+                        contactDataUri,
+                        null,
+                        null,
+                        null,
+                        null
+                    )
+                    cursor?.use { c ->
+                        if (c.moveToFirst()) {
+                            val nameIndex = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                            val numberIndex = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                            val contactIdIndex = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)
+
+                            if (nameIndex != -1) {
+                                val pickedName = c.getString(nameIndex)
+                                if (!pickedName.isNullOrBlank()) {
+                                    name = pickedName
+                                }
+                            }
+
+                            if (numberIndex != -1) {
+                                val rawNum = c.getString(numberIndex)
+                                if (!rawNum.isNullOrBlank()) {
+                                    phoneNumber = rawNum.replace("[^0-9+]".toRegex(), "")
+                                }
+                            }
+
+                            val contactId = if (contactIdIndex != -1) c.getString(contactIdIndex) else null
+                            if (contactId != null) {
+                                try {
+                                    val bdayCursor = context.contentResolver.query(
+                                        ContactsContract.Data.CONTENT_URI,
+                                        arrayOf(ContactsContract.CommonDataKinds.Event.START_DATE),
+                                        "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ? AND ${ContactsContract.CommonDataKinds.Event.TYPE} = ?",
+                                        arrayOf(
+                                            contactId,
+                                            ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE,
+                                            ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY.toString()
+                                        ),
+                                        null
+                                    )
+                                    bdayCursor?.use { bc ->
+                                        if (bc.moveToFirst()) {
+                                            val bdayStr = bc.getString(0)
+                                            if (!bdayStr.isNullOrBlank()) {
+                                                parseAndSetBirthday(bdayStr)
+                                                Toast.makeText(context, "Loaded contact & birthday!", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
         }
+    }
+
+    // Permission launcher for READ_CONTACTS
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        val pickIntent = Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
+        contactPhonePickerLauncher.launch(pickIntent)
+    }
+
+    fun launchContactPicker() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            permissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+        } else {
+            val pickIntent = Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
+            contactPhonePickerLauncher.launch(pickIntent)
+        }
+    }
+
+    // Native DatePickerDialog for full calendar Year, Month, Day selection
+    fun showDatePickerDialog() {
+        val initialYear = birthYearText.toIntOrNull() ?: Calendar.getInstance().get(Calendar.YEAR)
+        DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                birthYearText = year.toString()
+                birthMonth = month + 1
+                birthDay = dayOfMonth
+            },
+            initialYear,
+            birthMonth - 1,
+            birthDay
+        ).show()
     }
 
     Dialog(
@@ -217,7 +283,7 @@ fun AddEditPersonDialog(
                                     return@TextButton
                                 }
 
-                                val finalYear = if (includesBirthYear) birthYearText.toIntOrNull() else null
+                                val finalYear = birthYearText.toIntOrNull()
                                 val personToSave = (initialPerson ?: Person()).copy(
                                     name = trimmedName,
                                     birthMonth = birthMonth,
@@ -283,7 +349,7 @@ fun AddEditPersonDialog(
 
                                 if (showContactPicker) {
                                     FilledTonalButton(
-                                        onClick = { contactPickerLauncher.launch(null) },
+                                        onClick = { launchContactPicker() },
                                         shape = RoundedCornerShape(10.dp),
                                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                                     ) {
@@ -335,7 +401,7 @@ fun AddEditPersonDialog(
                                 shape = RoundedCornerShape(12.dp),
                                 trailingIcon = {
                                     if (showContactPicker) {
-                                        IconButton(onClick = { contactPickerLauncher.launch(null) }) {
+                                        IconButton(onClick = { launchContactPicker() }) {
                                             Icon(
                                                 imageVector = Icons.Default.PersonSearch,
                                                 contentDescription = "Search Contacts",
@@ -371,7 +437,7 @@ fun AddEditPersonDialog(
                         }
                     }
 
-                    // SECTION 2: Birthday Date (matching iOS Section "Birthday Date")
+                    // SECTION 2: Birthday Date with direct Month, Day, Year and Calendar DatePicker
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
@@ -383,23 +449,44 @@ fun AddEditPersonDialog(
                                 .padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(
-                                text = "Birthday Date",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Birthday Date",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+
+                                FilledTonalButton(
+                                    onClick = { showDatePickerDialog() },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CalendarMonth,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Pick Date", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+
+                            // 3-Column Row: Month, Day, and Year all together!
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 // Month Dropdown
                                 var monthExpanded by remember { mutableStateOf(false) }
                                 ExposedDropdownMenuBox(
                                     expanded = monthExpanded,
                                     onExpandedChange = { monthExpanded = !monthExpanded },
-                                    modifier = Modifier.weight(1.5f)
+                                    modifier = Modifier.weight(1.3f)
                                 ) {
                                     OutlinedTextField(
                                         value = monthNames.getOrElse(birthMonth - 1) { "Month" },
@@ -435,46 +522,44 @@ fun AddEditPersonDialog(
                                         val d = it.toIntOrNull()
                                         if (d != null && d in 1..31) birthDay = d
                                     },
-                                    label = { Text("Day (1-31)") },
+                                    label = { Text("Day") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(0.8f)
                                 )
-                            }
 
-                            // Include Birth Year (Calculate Age) Switch
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Include Birth Year (Calculate Age)",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Text(
-                                        text = "Shows milestone age and turning age pills",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Switch(
-                                    checked = includesBirthYear,
-                                    onCheckedChange = { includesBirthYear = it }
-                                )
-                            }
-
-                            if (includesBirthYear) {
+                                // Birth Year (Prominently visible directly with Month and Day)
                                 OutlinedTextField(
                                     value = birthYearText,
                                     onValueChange = { birthYearText = it },
-                                    label = { Text("Birth Year (e.g. 1995)") },
+                                    label = { Text("Year (Opt)") },
                                     placeholder = { Text("YYYY") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.weight(1.1f)
+                                )
+                            }
+
+                            // Live formatted date summary preview
+                            val parsedYear = birthYearText.toIntOrNull()
+                            val monthFormatted = monthNames.getOrElse(birthMonth - 1) { "" }
+                            val turningAgeStr = parsedYear?.let {
+                                val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+                                val turningAge = currentYear - it
+                                if (turningAge >= 0) " • Turns $turningAge" else ""
+                            } ?: ""
+
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "🎂 Selected Date: $monthFormatted $birthDay${if (parsedYear != null) ", $parsedYear" else ""}$turningAgeStr",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(10.dp)
                                 )
                             }
                         }

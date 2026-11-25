@@ -233,11 +233,21 @@ fun BirthdayCalendarView(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = person.name,
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = person.name,
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    person.getTurningAge()?.let { age ->
+                                        Text(
+                                            text = " (Turns $age)",
+                                            fontWeight = FontWeight.SemiBold,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,

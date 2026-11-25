@@ -71,11 +71,11 @@ data class Person(
     }
 
     /**
-     * Formats Month and Day, e.g. "Oct 14"
+     * Formats Month, Day, and optional Birth Year, e.g. "Oct 14, 1995" or "Oct 14"
      */
     fun getFormattedDate(): String {
         val monthName = DateFormatSymbols.getInstance(Locale.getDefault()).shortMonths.getOrNull(birthMonth - 1) ?: "$birthMonth"
-        return "$monthName $birthDay"
+        return if (birthYear != null) "$monthName $birthDay, $birthYear" else "$monthName $birthDay"
     }
 
     /**
