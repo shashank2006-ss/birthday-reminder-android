@@ -1,14 +1,22 @@
 package com.birthdayreminder.app.ui.components
 
+import android.net.Uri
+import android.provider.ContactsContract
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Contacts
+import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -55,6 +63,56 @@ fun AddEditPersonDialog(
         "💖 Heartfelt" to "Happy Birthday! So grateful to have you in my life. Wishing you endless happiness! ❤️",
         "✨ Short" to "Happy Birthday! Have an amazing celebration today! 🥳🎈"
     )
+
+    val context = LocalContext.current
+    val contactPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickContact()
+    ) { contactUri: Uri? ->
+        contactUri?.let { uri ->
+            try {
+                val cursor = context.contentResolver.query(uri, null, null, null, null)
+                cursor?.use { c ->
+                    if (c.moveToFirst()) {
+                        val idIndex = c.getColumnIndex(ContactsContract.Contacts._ID)
+                        val nameIndex = c.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
+                        val hasPhoneIndex = c.getColumnIndex(ContactsContract.Contacts.HAS_PHONE_NUMBER)
+
+                        if (nameIndex != -1) {
+                            val pickedName = c.getString(nameIndex)
+                            if (!pickedName.isNullOrBlank() && name.isBlank()) {
+                                name = pickedName
+                            }
+                        }
+
+                        val hasPhone = if (hasPhoneIndex != -1) c.getInt(hasPhoneIndex) > 0 else true
+                        if (idIndex != -1 && hasPhone) {
+                            val contactId = c.getString(idIndex)
+                            val phoneCursor = context.contentResolver.query(
+                                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                                arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+                                "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
+                                arrayOf(contactId),
+                                null
+                            )
+                            phoneCursor?.use { pc ->
+                                if (pc.moveToFirst()) {
+                                    val numberIndex = pc.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                                    if (numberIndex != -1) {
+                                        val number = pc.getString(numberIndex)
+                                        if (!number.isNullOrBlank()) {
+                                            phoneNumber = number.replace("[^0-9+]".toRegex(), "")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -213,15 +271,53 @@ fun AddEditPersonDialog(
                         }
                     }
 
-                    // Phone Number / Handle
+                    // Phone Number / Handle & Device Contact Picker
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (selectedPlatform == SocialPlatform.TELEGRAM) "Telegram Username *" else "Phone Number *",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        if (selectedPlatform != SocialPlatform.TELEGRAM) {
+                            FilledTonalButton(
+                                onClick = { contactPickerLauncher.launch(null) },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PersonSearch,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Search Contacts", fontSize = 12.sp)
+                            }
+                        }
+                    }
+
                     OutlinedTextField(
                         value = phoneNumber,
                         onValueChange = { phoneNumber = it },
-                        label = {
+                        placeholder = {
                             Text(
-                                if (selectedPlatform == SocialPlatform.TELEGRAM) "Telegram Username (e.g. @username) *"
-                                else "Phone Number (with Country Code) *"
+                                if (selectedPlatform == SocialPlatform.TELEGRAM) "@username"
+                                else "Type directly or pick from contacts"
                             )
+                        },
+                        trailingIcon = {
+                            if (selectedPlatform != SocialPlatform.TELEGRAM) {
+                                IconButton(onClick = { contactPickerLauncher.launch(null) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Contacts,
+                                        contentDescription = "Search Contacts",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
                         },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(

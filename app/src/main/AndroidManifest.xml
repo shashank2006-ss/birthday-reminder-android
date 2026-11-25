@@ -12,6 +12,7 @@
 
     <!-- Direct SMS sending -->
     <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
 
     <!-- Queries for WhatsApp and Telegram on Android 11+ -->
     <queries>
